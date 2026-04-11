@@ -5,17 +5,26 @@ from datetime import datetime
 
 # 1. 頁面基本設定
 st.set_page_config(page_title="個人股票管理", layout="wide")
-st.title("📈 專業自選股與派息追蹤 App")
+st.title("📈 專業自選股與派息管理 App")
 
+# 初始化數據
 if 'portfolio' not in st.session_state:
     st.session_state.portfolio = []
+if 'selected_stock_div' not in st.session_state:
+    st.session_state.selected_stock_div = None
 
 # --- 側邊欄：導航 ---
+# 如果正在看派息詳情，顯示回退按鈕
+if st.session_state.selected_stock_div:
+    if st.sidebar.button("⬅️ 返回持倉列表"):
+        st.session_state.selected_stock_div = None
+        st.rerun()
+
 page = st.sidebar.radio("功能導航", ["持倉管理", "全功能外幣換算"])
 
 # --- 頁面 1：持倉管理 ---
-if page == "持倉管理":
-    st.subheader("📊 持倉細節與派息日曆")
+if page == "持倉管理" and not st.session_state.selected_stock_div:
+    st.subheader("📊 持倉列表")
     
     with st.expander("➕ 新增股票持倉"):
         with st.form("add_form", clear_on_submit=True):
@@ -33,25 +42,22 @@ if page == "持倉管理":
 
     if st.session_state.portfolio:
         st.write("---")
-        h1, h2, h3, h4, h5 = st.columns([2.5, 2, 2.5, 0.8, 0.8])
+        h1, h2, h3, h4 = st.columns([3, 2, 2.5, 2.5])
         h1.write("**公司名稱 (中/英)**")
         h2.write("**報價 / 成本**")
-        h3.write("**盈虧 & 派息追蹤**")
-        h4.write("**修改**")
-        h5.write("**刪除**")
+        h3.write("**實時盈虧**")
+        h4.write("**功能操作**")
         st.write("---")
 
         for index, item in enumerate(st.session_state.portfolio):
             try:
                 ticker = yf.Ticker(item['symbol'])
                 info = ticker.info
-                full_name = info.get('shortName', 'Unknown')
                 
-                div_rate = info.get('dividendRate') or 0.0
-                div_yield = (info.get('dividendYield') or 0.0) * 100
-                ex_date_timestamp = info.get('exDividendDate')
-                ex_date_str = datetime.fromtimestamp(ex_date_timestamp).strftime('%Y-%m-%d') if ex_date_timestamp else "N/A"
+                # 1. 名稱優化 (優先中文)
+                name = info.get('longName') or info.get('shortName') or 'Unknown'
                 
+                # 2. 報價
                 hist = ticker.history(period="5d")
                 curr_p = hist['Close'].iloc[-1] if not hist.empty else 0.0
                 
@@ -60,33 +66,38 @@ if page == "持倉管理":
                 profit = round(market_val - total_cost, 2)
                 p_pct = (profit / total_cost * 100) if total_cost != 0 else 0
                 
-                c1, c2, c3, c4, c5 = st.columns([2.5, 2, 2.5, 0.8, 0.8])
+                c1, c2, c3, c4 = st.columns([3, 2, 2.5, 2.5])
+                
                 with c1:
-                    st.write(f"**{full_name}**")
+                    st.write(f"**{name}**")
                     st.caption(f"{item['symbol']} | {item['shares']} 股")
+                
                 with c2:
                     st.write(f"現價: **${curr_p:.2f}**")
                     st.caption(f"成本: ${item['buy_price']:.2f}")
+                
                 with c3:
                     color = "green" if profit >= 0 else "red"
                     st.markdown(f":{color}[**${profit:,.2f}** ({p_pct:+.2f}%)]")
-                    if div_rate > 0:
-                        st.caption(f"📅 除淨日: {ex_date_str}")
-                        st.caption(f"💰 派息: 每股約 ${div_rate:.4f} (年率 {div_yield:.1f}%)")
-                    else:
-                        st.caption("🚫 無近期派息數據")
+                
                 with c4:
-                    if st.button("✏️", key=f"ed_{index}"):
+                    # 三個功能按鈕
+                    b1, b2, b3 = st.columns(3)
+                    if b1.button("📅", key=f"div_{index}", help="查看派息詳情"):
+                        st.session_state.selected_stock_div = item['symbol']
+                        st.rerun()
+                    if b2.button("✏️", key=f"ed_{index}"):
                         st.session_state.edit_index = index
                         st.rerun()
-                with c5:
-                    if st.button("🗑️", key=f"de_{index}"):
+                    if b3.button("🗑️", key=f"de_{index}"):
                         st.session_state.portfolio.pop(index)
                         st.rerun()
                 st.write("---")
-            except:
-                st.error(f"數據加載錯誤 ({item['symbol']})")
 
+            except Exception as e:
+                st.error(f"數據加載錯誤: {item['symbol']}")
+
+        # 修改彈窗邏輯
         if 'edit_index' in st.session_state:
             idx = st.session_state.edit_index
             if idx < len(st.session_state.portfolio):
@@ -107,34 +118,60 @@ if page == "持倉管理":
     else:
         st.info("目前尚無持倉數據。")
 
+# --- 頁面 1.5：派息詳情版面 (獨立頁面) ---
+elif st.session_state.selected_stock_div:
+    sym = st.session_state.selected_stock_div
+    st.subheader(f"📅 {sym} 派息追蹤詳情")
+    
+    try:
+        ticker = yf.Ticker(sym)
+        info = ticker.info
+        calendar = ticker.calendar # Yahoo 提供的重要日期
+        
+        # 準備數據表 (根據用戶要求的欄位)
+        # 注意：部分細節欄位 Yahoo API 免費版可能受限，我們盡力抓取
+        div_data = {
+            "資訊項": ["公司名稱", "目前價格", "年度股息", "股息率", "除淨日 (Ex-Div Date)", "派息日 (Payment Date)", "財報公佈日", "股息種類"],
+            "內容": [
+                info.get('longName', 'N/A'),
+                f"${info.get('regularMarketPrice', 'N/A')}",
+                f"${info.get('dividendRate', 'N/A')}",
+                f"{(info.get('dividendYield', 0)*100):.2f}%",
+                datetime.fromtimestamp(info.get('exDividendDate')).strftime('%Y-%m-%d') if info.get('exDividendDate') else "N/A",
+                datetime.fromtimestamp(info.get('lastDividendDate')).strftime('%Y-%m-%d') if info.get('lastDividendDate') else "N/A",
+                calendar.get('Earnings Date', ['N/A'])[0] if isinstance(calendar, dict) else "N/A",
+                "現金派息" # 預設
+            ]
+        }
+        
+        st.table(pd.DataFrame(div_data))
+        
+        st.write("### 📜 歷史派息記錄 (最近 5 次)")
+        div_history = ticker.dividends.tail(5)
+        if not div_history.empty:
+            st.dataframe(div_history.sort_index(ascending=False))
+        else:
+            st.write("暫無歷史派息記錄")
+            
+    except Exception as e:
+        st.error(f"獲取派息詳情失敗: {e}")
+
 # --- 頁面 2：全功能外幣換算機 ---
 elif page == "全功能外幣換算":
-    st.subheader("💱 全球貨幣任意互換計算機")
+    st.subheader("💱 全球貨幣任意互換")
     cur_list = ["HKD", "USD", "JPY", "GBP", "CNY", "EUR", "AUD", "CAD", "TWD"]
-    col_in, col_mid, col_out = st.columns([2, 1, 2])
+    col_in, col_mid, col_out = st.columns()
     with col_in:
-        from_curr = st.selectbox("賣出貨幣", cur_list, index=1)
-        amt = st.number_input("輸入金額", min_value=0.0, value=100.0)
-    with col_mid:
-        st.write("## ➡️")
+        from_curr = st.selectbox("賣出", cur_list, index=1)
+        amt = st.number_input("金額", min_value=0.0, value=100.0)
+    with col_mid: st.write("## ➡️")
     with col_out:
-        to_curr = st.selectbox("買入貨幣", cur_list, index=0)
+        to_curr = st.selectbox("買入", cur_list, index=0)
         
-    if from_curr == to_curr:
-        result, rate = amt, 1.0
-    else:
-        try:
-            pair = f"{from_curr}{to_curr}=X"
-            rate_data = yf.Ticker(pair).history(period="1d")
-            rate = rate_data['Close'].iloc[-1]
-            result = amt * rate
-        except:
-            st.error("暫時無法獲取該匯率組合")
-            rate, result = 0, 0
-
-    st.divider()
-    res_col1, res_col2 = st.columns(2)
-    with res_col1:
-        st.metric(f"換算結果 ({to_curr})", f"{result:,.2f}")
-    with res_col2:
-        st.write(f"**當前匯率：** 1 {from_curr} = {rate:.4f} {to_curr}")
+    pair = f"{from_curr}{to_curr}=X"
+    try:
+        rate = yf.Ticker(pair).history(period="1d")['Close'].iloc[-1]
+        st.metric(f"結果 ({to_curr})", f"{(amt * rate):,.2f}")
+        st.caption(f"匯率: 1 {from_curr} = {rate:.4f} {to_curr}")
+    except:
+        st.error("匯率抓取失敗")
