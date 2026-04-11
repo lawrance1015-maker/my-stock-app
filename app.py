@@ -1,15 +1,20 @@
-這是一個非常穩健的做法。為了確保縮進（Indentation）完全正確並徹底修復 st.form 的按鈕報錯，我為你整理了這份最終完整整合版。
-這份代碼包含了：顯示股票名稱、單筆修改、單筆刪除、即時匯率換算，以及修復了你遇到的「取消按鈕」崩潰問題。
-## 🚀 完整代碼 (app.py)：直接全選並覆蓋
+import streamlit as st
+import yfinance as yf
+import pandas as pd
 
-import streamlit as stimport yfinance as yfimport pandas as pd
 # 1. 頁面基本設定
 st.set_page_config(page_title="個人股票管理", layout="wide")
 st.title("📈 我的自選股專業管理 App")
-# 初始化數據儲存if 'portfolio' not in st.session_state:
+
+# 初始化數據儲存
+if 'portfolio' not in st.session_state:
     st.session_state.portfolio = []
-# --- 側邊欄：導航與修改功能 ---page = st.sidebar.radio("功能導航", ["持倉管理", "外幣換算計算機"])
-# --- 頁面 1：持倉管理 ---if page == "持倉管理":
+
+# --- 側邊欄：導航與修改功能 ---
+page = st.sidebar.radio("功能導航", ["持倉管理", "外幣換算計算機"])
+
+# --- 頁面 1：持倉管理 ---
+if page == "持倉管理":
     st.subheader("📊 實時持倉細節")
     
     # --- A. 新增股票表單 ---
@@ -121,7 +126,9 @@ st.title("📈 我的自選股專業管理 App")
                 del st.session_state.edit_index
     else:
         st.info("目前尚無持倉數據。")
-# --- 頁面 2：外幣換算計算機 ---elif page == "外幣換算計算機":
+
+# --- 頁面 2：外幣換算計算機 ---
+elif page == "外幣換算計算機":
     st.subheader("🔢 外幣即時換算")
     
     c_a, c_b = st.columns(2)
@@ -146,14 +153,3 @@ st.title("📈 我的自選股專業管理 App")
         st.error("匯率數據抓取失敗")
 
     st.info("💡 數據來源：Yahoo Finance 實時數據")
-
-## 🛠️ 這次修正的重點：
-
-   1. 徹底修復報錯：將「取消修改」按鈕從 with st.form 內部移出，放置在 sidebar 的表單下方。
-   2. 增強排版：使用 st.columns([2, 2, 2, 1, 1]) 調整比例，讓股票名稱有更多空間顯示，而修改/刪除按鈕則佔據較窄空間。
-   3. 增加股票名稱：現在每行都會顯示 Yahoo Finance 抓到的 shortName，讓介面更像專業軟體。
-   4. 按鈕圖標化：使用 ✏️ (修改) 和 🗑️ (刪除) 圖標，讓手機版介面更簡潔、不擁擠。
-
-請將這段代碼 Commit 到 GitHub。 這次部署成功後，你可以試試點擊 ✏️，它會在側邊欄彈出編輯框，你可以隨時調整買入成本！
-下一步建議： 你是否希望加入「刪除確認」功能，防止誤點垃圾桶而刪掉持倉？
-
