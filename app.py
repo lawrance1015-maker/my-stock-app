@@ -37,7 +37,12 @@ if page == "資產管理":
         for s in st.session_state.portfolio:
             # 抓取實時數據
             ticker = yf.Ticker(s['symbol'])
-            current_price = ticker.fast_info['lastPrice']
+            # 獲取最近 1 天的歷史數據，取最後一筆收盤價
+price_history = ticker.history(period="1d")
+if not price_history.empty:
+    current_price = price_history['Close'].iloc[-1]
+else:
+    current_price = 0.0  # 如果抓不到數據，給個預設值
             currency = ticker.info.get('currency', 'HKD')
             
             market_value = current_price * s['shares']
