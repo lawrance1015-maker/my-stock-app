@@ -43,7 +43,15 @@ if not price_history.empty:
     current_price = price_history['Close'].iloc[-1]
 else:
     current_price = 0.0  # 如果抓不到數據，給個預設值
-            currency = ticker.info.get('currency', 'HKD')
+                    for s in st.session_state.portfolio:
+            ticker = yf.Ticker(s['symbol'])
+            # 這裡之後的所有行，前面的空格數量必須一模一樣
+            current_price = ticker.fast_info['lastPrice']
+            currency = ticker.info.get('currency', 'HKD') # 確保這行與上一行對齊
+            
+            market_value = current_price * s['shares']
+            # ... 後續代碼
+
             
             market_value = current_price * s['shares']
             profit = (current_price - s['buy_price']) * s['shares']
