@@ -36,23 +36,32 @@ if page == "資產管理":
     # 顯示持倉列表與計算
     if st.session_state.portfolio:
         data_list = []
-        for s in st.session_state.portfolio:
-            try:
+                for s in st.session_state.portfolio:
+                 try:
                 ticker = yf.Ticker(s['symbol'])
                 
-                # 使用 history 獲取最新價格 (最穩定)
-                hist = ticker.history(period="1d")
+                # --- 優化後的抓取邏輯 ---
+                # 抓取過去 5 天數據，確保能拿到最近一筆成交價
+                hist = ticker.history(period="5d") 
                 if not hist.empty:
+                    # 取最後一列的 'Close' (收盤價)
                     current_price = hist['Close'].iloc[-1]
                 else:
-                    current_price = 0.0
+                    # 如果 history 失敗，嘗試從 info 抓取
+                    current_price = ticker.info.get('regularMarketPrice') or ticker.info.get('previousClose') or 0.0
                 
                 # 獲取貨幣資訊
                 currency = ticker.info.get('currency', 'HKD')
                 
-                market_value = current_price * s['shares']
-                profit = (current_price - s['buy_price']) * s['shares']
-                profit_pct = (profit / (s['buy_price'] * s['shares']) * 100) if s['buy_price'] != 0 else 0
+                # --- 後續計算保持不變 ---
+                if current_price > 0:
+                    market_value = current_price * s['shares']
+                    profit = (current_price - s['buy_price']) * s['shares']
+                    profit_pct = (profit / (s['buy_price'] * s['shares']) * 100)
+                else:
+                    market_value = 0.0
+                    profit = 0.0
+                    profit_pct = 0.0
                 
                 data_list.append({
                     "代號": s['symbol'],
@@ -65,7 +74,8 @@ if page == "資產管理":
                     "盈虧 (%)": f"{profit_pct:.2f}%"
                 })
             except Exception as e:
-                st.error(f"無法讀取 {s['symbol']}: {e}")
+                st.error(f"查詢 {s['symbol']} 失敗: {e}")
+
         
         if data_list:
             df = pd.DataFrame(data_list)
