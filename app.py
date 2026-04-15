@@ -89,7 +89,7 @@ elif st.session_state.selected_stock:
     
     # AASTOCKS 連結
     pure_sym = str(sym).replace(".HK", "").zfill(5)
-    url = f"https://aastocks.com{pure_sym}"
+    url = f"https://www.aastocks.com/tc/stocks/analysis/dividend.aspx?symbol={pure_sym}"
     st.success(f"🔗 [點此打開 AASTOCKS 查看官方準確派息數據]({url})")
     
     try:
